@@ -16,6 +16,9 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import r2_score
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
+from typing import Optional
+from tqdm import tqdm
+
 
 
 DEFAULT_INPUT_DIR = Path("/System/Volumes/Data/Users/yuqitao/Downloads/PBM_65536")
@@ -47,7 +50,8 @@ class TrainingResult:
     best_model_path: Path
     history: Dict[str, List[float]]
     metrics: Dict[str, float]
-    scatter_path: Path | None
+    scatter_path: Optional[Path]
+
 
 
 # ------------------------- Data Loading ------------------------- #
@@ -58,10 +62,11 @@ def read_zscore_file(path: Path) -> pd.DataFrame:
 
 
 def load_tf_frames(tf_name: str, input_dir: Path) -> pd.DataFrame:
-    cytosine_path = input_dir / f"{tf_name}_Zscore_Cytosine.txt"
-    methyl_path = input_dir / f"{tf_name}_Zscore_5mCG.txt"
+    cytosine_path = next(input_dir.glob(f"*{tf_name}*Zscore_Cytosine.txt"))
+    methyl_path = next(input_dir.glob(f"*{tf_name}*Zscore_5mCG.txt"))
     cyt = read_zscore_file(cytosine_path)
     methyl = read_zscore_file(methyl_path)
+
     merged = (
         cyt.rename(columns={"z": "z_cytosine"})
         .merge(methyl.rename(columns={"z": "z_5mcg"}), on="kmer", how="inner")
@@ -314,6 +319,7 @@ def process_tf(tf_name: str, input_dir: Path, output_dir: Path, seed: int = 42, 
     _, _, test_loader = loaders
     preds, targets = evaluate(model, test_loader, device)
     metrics = compute_metrics(preds, targets)
+    print(f"{tf_name}: Pearson={metrics['pearson_r']:.3f}, Spearman={metrics['spearman_rho']:.3f}, R2={metrics['r2']:.3f}")
     metrics_path = save_metrics(paths, tf_name, metrics)
 
     model_path = save_model(paths, tf_name, model)
@@ -347,7 +353,11 @@ def main() -> None:
             delayed(process_tf)(tf, args.input_dir, args.output_dir, args.seed, plot) for tf in args.tfs
         )
     else:
-        results = [process_tf(tf, args.input_dir, args.output_dir, args.seed, plot) for tf in args.tfs]
+        results = []
+        for tf in tqdm(args.tfs, desc="Processing TFs", unit="TF"):
+           results.append(process_tf(tf, args.input_dir, args.output_dir, args.seed, plot))
+
+
 
     summary = {tf: result.metrics for tf, result in zip(args.tfs, results)}
     summary_path = args.output_dir / "metrics_summary.json"
