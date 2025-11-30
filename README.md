@@ -1,0 +1,22 @@
+TF_MethylBind pipeline
+project goal
+Train regression models to predict methylation-sensitive TF binding using PBM 8-mer Z-scores.
+what this pipeline does
+For each TF in the dataset (CUX1, CUX2, MAX, DLX3, NKX2.5, NFATC2, POU5F1, LHX9), the script:
+loads paired files
+Finds one unmethylated file (*Zscore_Cytosine.txt) and one methylated file (*Zscore_5mCG.txt).
+Merges them on the shared 8-mer.
+Computes Δbinding = Z_5mCG − Z_Cytosine (supervised learning target).
+encodes sequences
+Converts each 8-bp DNA probe into a 32-dim vector using one-hot encoding [A, C, G, T] × 8 positions.
+splits data
+70% train, 15% validation, 15% test (shuffled, seeded for reproducibility).
+trains a regression network
+Architecture: 32 → 64 → 64 → 1, with ReLU activations.
+Loss: MSE, optimizer: Adam.
+Early stopping on validation loss (patience = 5 epochs).
+evaluates performance
+Computes correlation + regression quality on the test set: Pearson r, Spearman ρ, R² (true Δbinding vs predicted Δbinding).
+Generates scatter plots (y = x reference line) for quick visual inspection.
+
+#check results in yuqitao/outputs
